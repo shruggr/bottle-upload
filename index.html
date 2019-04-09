@@ -1,248 +1,322 @@
 <html>
+	<head>
+		<style>
+			body {
+				font-family: monospace;
+				font-size: 15px;
+				margin: 10% auto;
+				max-width: 600px;
+				position: relative;
+			}
 
-<head>
-    <!-- <script src="b://3412b9beb4234acea4d3406c38af5e283cc91486abeddfa80fcb45842c1f99c2"></script>
-    <script src="b://3bd388b0097b3bde7c8c8f5d760e1c772f5e9a002a33a42bb3440a176df21415"></script> -->
-    <script src="https://bico.media/3412b9beb4234acea4d3406c38af5e283cc91486abeddfa80fcb45842c1f99c2"></script>
-    <script src="https://bico.media/3bd388b0097b3bde7c8c8f5d760e1c772f5e9a002a33a42bb3440a176df21415"></script>
-    <script>
-        let privateKey;
-        let address;
-        let utxos = [];
-        let chunkUtxos = [];
-        let spendUtxos = [];
-        let chunkSize = 90000;
-        let splitValue = 90500;
-        let splitCount;
+			#qrcode {
+				float: right;
+			}
 
-        let requiredTxns;
-        function initialize() {
-            let wif = localStorage.getItem('privateKey');
-
-            if (wif) {
-                privateKey = bsv.PrivateKey.fromWIF(wif);
+			hr {
+				clear: both;
+			}
+            a {
+                cursor: pointer;
+                text-decoration: none;
             }
-            if (!privateKey) {
-                privateKey = bsv.PrivateKey.fromRandom();
-                localStorage.setItem('privateKey', privateKey.toWIF());
-            }
-            address = privateKey.toAddress();
-            document.getElementById('address').innerText = address;
+		</style>
+		<meta charset="UTF-8" />
+		<script src="b://3412b9beb4234acea4d3406c38af5e283cc91486abeddfa80fcb45842c1f99c2/"></script>
+        <script src="b://3bd388b0097b3bde7c8c8f5d760e1c772f5e9a002a33a42bb3440a176df21415/"></script>
+		<script>
+			let privateKey;
+			let address;
+			let utxos = [];
+			let readyUtxos = [];
+			let uncomfirmedUtxos = [];
+			let spendUtxos = [];
+			let chunkSize = 90e3;
+			let splitValue = 90.5e3;
+			let splitCount;
+            let chunks;
 
-            const qr = qrcode(0, 'L');
-            qr.addData(address);
-            qr.make();
-            document.getElementById('qrcode').innerHTML = qr.createImgTag();
-            fetch('https://api.bitindex.network/api/v2/addrs/utxos?address=' + address, {
-                headers: {
-                    api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4'
-                }
-            }).then((res) => res.json())
-                .then(({ data }) => {
-                    utxos = data;
-                    chunkUtxos = utxos.filter((utxo) => utxo.satoshis == splitValue);
-                    spendUtxos =  utxos.filter((utxo) => utxo.satoshis != splitValue);
+			let requiredTxns;
+			function initialize() {
+				let wif = localStorage.getItem('privateKey');
 
-                    balance = spendUtxos.reduce((balance, utxo) => {
-                        return balance + utxo.satoshis;
-                    }, 0);
+				if (wif) {
+					privateKey = bsv.PrivateKey.fromWIF(wif);
+				}
+				if (!privateKey) {
+					privateKey = bsv.PrivateKey.fromRandom();
+					localStorage.setItem('privateKey', privateKey.toWIF());
+				}
+				address = privateKey.toAddress();
+				document.getElementById('address').innerText = address;
 
-                    splitCount = Math.min(Math.floor((balance - 50000) / splitValue), 500);
-                    document.getElementById('confirmedChunk').innerText = chunkUtxos.filter((utxo) => utxo.height).length;
-                    document.getElementById('unconfirmedChunk').innerText = chunkUtxos.filter((utxo) => !utxo.height).length;
-                    document.getElementById('confirmed').innerText = spendUtxos.filter((utxo) => utxo.height).length;
-                    document.getElementById('unconfirmed').innerText = spendUtxos.filter((utxo) => !utxo.height).length;
-                    document.getElementById('balance').innerText = utxos.reduce((balance, utxo) => {
-                        return balance + utxo.satoshis;
-                    }, 0) / 100000000;
-                    document.getElementById('unsplitBalance').innerText = spendUtxos.reduce((balance, utxo) => {
-                        return balance + utxo.satoshis;
-                    }, 0) / 100000000;
-                    document.getElementById('splitBalance').innerText = chunkUtxos.reduce((balance, utxo) => {
-                        return balance + utxo.satoshis;
-                    }, 0) / 100000000;
-                    document.getElementById('splitCount').innerText = splitCount;
-                })
-        }
+				const qr = qrcode(0, 'L');
+				qr.addData(`bitcoin:${address}?sv`);
+				qr.make();
+				document.getElementById('qrcode').innerHTML = qr.createImgTag();
+				fetch('https://api.bitindex.network/api/v2/addrs/utxos?address=' + address, {
+					headers: {
+						api_key: '5eTuVfKYpWiaRWaEBN5NF1VPKf9Tvm2HBXh9mmigjNG2iC94ZCnut1SMb3sNV4hwV4',
+					},
+				})
+					.then((res) => res.json())
+					.then(({data}) => {
+						utxos = data;
+						readyUtxos = utxos.filter((utxo) => {
+							return utxo.satoshis == splitValue && utxo.height > 0
+						});
+						uncomfirmedUtxos = utxos.filter((utxo) => {
+							return utxo.satoshis == splitValue && !(utxo.height > 0)
+						});
+						spendUtxos = utxos.filter((utxo) => utxo.satoshis != splitValue);
 
-        function split() {
-            let transaction = new bsv.Transaction()
-                .from(spendUtxos);
-            for (let i = 0; i < splitCount; i++) {
-                transaction.to(address, splitValue);
-            }
+						balance = spendUtxos.reduce((balance, utxo) => {
+							return balance + utxo.satoshis;
+						}, 0);
 
-            transaction.change(address);
-            transaction.sign(privateKey);
+						splitCount = Math.min(Math.floor(balance / splitValue), 500);
+						document.getElementById('confirmed').innerText = readyUtxos.length;
+						document.getElementById('unconfirmed').innerText = uncomfirmedUtxos.length;
+						document.getElementById('unsplit').innerText = spendUtxos.length;
+						document.getElementById('balance').innerText =
+							(
+								utxos.reduce((balance, utxo) => {
+									return balance + utxo.satoshis;
+								}, 0) / 100000000
+							).toFixed(4) + '🐉';
+						document.getElementById('splitCount').innerText = splitCount;
+					});
+			}
 
-            fetch('https://api.bitindex.network/api/tx/send', {
-                method: 'POST',
-                body: JSON.stringify({ rawtx: transaction.toString() }),
-                headers: {
-                    api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4',
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then((res) => res.json())
-            .then((res) => console.log(res))
-            .then(() => initialize());
-        }
+			function split() {
+				let transaction = new bsv.Transaction().from(spendUtxos);
+				for (let i = 0; i < splitCount; i++) {
+					transaction.to(address, splitValue);
+				}
 
-        function analyzeFile() {
-            const file = document.getElementById('file').files[0];
-            requiredTxns = Math.ceil(file.size / chunkSize) + 1;
-            document.getElementById('requiredTxns').innerText = requiredTxns;
-            document.getElementById('cost').innerText = requiredTxns * splitValue / 100000000;
-            document.getElementById('uploadButton').disabled = requiredTxns > chunkUtxos.length;
-        }
-        function upload() {
-            const file = document.getElementById('file').files[0];
-            const reader = new FileReader();
-            const txns = [];
+				transaction.change(address);
+				transaction.sign(privateKey);
 
-            reader.onload = (e) => {
-                let buffer = reader.result;
-                console.log(buffer);
-                const chunks = buffer.byteLength / chunkSize;
-                console.log(`${chunks} chunks`);
-                let i;
-                for (i = 0; i < chunks; i++) {
-                    let chunk = bsv.deps.Buffer.from(buffer.slice(i * chunkSize, (i + 1) * chunkSize));
-                    let txn = new bsv.Transaction()
-                        .from(utxos[i])
-                        .addData([
-                            '1ChDHzdd1H4wSjgGMHyndZm6qxEDGjqpJL',
-                            chunk
-                        ]);
-                    if(chunk.byteLength < chunkSize - 546) {
-                        txn.change(address)
+				fetch('https://api.bitindex.network/api/tx/send', {
+					method: 'POST',
+					body: JSON.stringify({rawtx: transaction.toString()}),
+					headers: {
+						api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4',
+						'Content-Type': 'application/json',
+					},
+				})
+					.then((res) => res.json())
+					.then((res) => console.log(res))
+					.then(() => initialize());
+			}
+
+			function analyzeFile() {
+				const file = document.getElementById('file').files[0];
+                chunks = Math.ceil(file.size / chunkSize);
+				requiredTxns = chunks + (chunks > 1 ? 2 : 1);
+				document.getElementById('requiredTxns').innerText = requiredTxns;
+				document.getElementById('cost').innerText = (requiredTxns * splitValue) / 100000000;
+				document.getElementById('uploadButton').disabled = requiredTxns > readyUtxos.length;
+			}
+			function upload() {
+				const file = document.getElementById('file').files[0];
+				const reader = new FileReader();
+				const txns = [];
+
+				reader.onload = (e) => {
+					console.log(file);
+					let buffer = reader.result;
+					console.log(buffer);
+					console.log(`${chunks} chunks`);
+					let i = 0;
+                    let bTxn;
+                    if(chunks > 1) {
+                        for (i = 0; i < chunks; i++) {
+                            let chunk = bsv.deps.Buffer.from(buffer.slice(i * chunkSize, (i + 1) * chunkSize));
+                            let txn = new bsv.Transaction()
+                                .from(readyUtxos[i])
+                                .addData(['1ChDHzdd1H4wSjgGMHyndZm6qxEDGjqpJL', chunk]);
+                            if (chunk.byteLength < chunkSize - 546) {
+                                txn.change(address);
+                            }
+
+                            txn.sign(privateKey);
+                            txns.push(txn);
+                        }
+
+                        bTxn = new bsv.Transaction()
+                            .from(readyUtxos[i++])
+                            .addData([
+                                '15DHFxWZJT58f9nhyGnsRBqrgwK4W6h4Up',
+                                'Dynamic upload',
+                                file.type,
+                                bsv.deps.Buffer.from('20', 'hex'),
+                                file.name,
+                                bsv.deps.Buffer.from('20', 'hex'),
+                                ...txns.map((txn) => bsv.deps.Buffer.from(txn.hash, 'hex')),
+                            ])
+                            .change(address)
+                            .sign(privateKey);
+
+                        txns.push(bTxn);
+                    }
+					else {
+						bTxn = new bsv.Transaction()
+                            .from(readyUtxos[i++])
+                            .addData([
+                                '19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut',
+                                bsv.deps.Buffer.from(buffer),
+                                file.type,
+                                bsv.deps.Buffer.from('20', 'hex'),
+                                file.name
+                            ]);
+                        if (buffer.byteLength < chunkSize - 546) {
+                            bTxn.change(address);
+                        }
+                        bTxn.sign(privateKey);
+						txns.push(bTxn);
                     }
 
-                    txn.sign(privateKey);
-                    txns.push(txn);
-                }
+					let dTxn = new bsv.Transaction()
+						.from(readyUtxos[i])
+						.addData([
+							'19iG3WTYSsbyos3uJ733yK4zEioi1FesNU',
+							file.name,
+							'' + bTxn.hash,
+							'b',
+							'' + +new Date(),
+						])
+						.change(address)
+						.sign(privateKey);
 
-                let bcatTxn = new bsv.Transaction()
-                    .from(utxos[i])
-                    .addData([
-                        '15DHFxWZJT58f9nhyGnsRBqrgwK4W6h4Up',
-                        'bottle upload',
-                        file.type,
-                        bsv.deps.Buffer.from('20', 'hex'),
-                        file.name,
-                        bsv.deps.Buffer.from('20', 'hex'),
-                        ...txns.map((txn) => bsv.deps.Buffer.from(txn.hash, 'hex'))
-                    ])
-                    .change(address)
-                    .sign(privateKey);
+					txns.push(dTxn);
 
-                txns.push(bcatTxn);
-                document.getElementById('txid').innerText = 'Uploading...';
-                txns.reduce((acc, txn) => {
-                    return acc.then(() => {
-                        return fetch('https://api.bitindex.network/api/v2/tx/send', {
-                            method: 'POST',
-                            body: JSON.stringify({ hex: txn.toString() }),
-                            headers: {
-                                api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4',
-                                'Content-Type': 'application/json'
-                            }
-                        })
-                        .then((res) => {
-                            if(!res.ok) {
-                                return Promise.reject(res.json())
-                            }
-                        });
-                    })
-                }, Promise.resolve())
-                .catch(console.error)
-                .then(() => {
-                    document.getElementById('txid').innerText = bcatTxn.hash;
-                    initialize();
-                });
+                    i = 0;
+					txns
+						.reduce((acc, txn) => {
+							console.log(txn.toString());
+							return acc.then(() => {
+								document.getElementById('txid').innerText = `Uploading ${++i} of ${txns.length}`;
+								return fetch('https://api.bitindex.network/api/v2/tx/send', {
+									method: 'POST',
+									body: JSON.stringify({hex: txn.toString()}),
+									headers: {
+										api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4',
+										'Content-Type': 'application/json',
+									},
+								}).then((res) => {
+									if (!res.ok) {
+										return Promise.reject(res.json());
+									}
+								});
+							});
+						}, Promise.resolve())
+						.catch(console.error)
+						.then(() => {
+							dUrl = address + '/' + file.name;
+							document.getElementById('txid').innerHTML =
+								'<a href="https://bico.media/' +
+								dUrl +
+								'" target="_blank"> D://' +
+								dUrl +
+								'</a><br>' +
+								'B://' +
+								bTxn.hash;
+							initialize();
+						});
 
-                console.log(bcatTxn.hash);
-            }
+					console.log('bcat:', bTxn.hash);
+					console.log('d:', dTxn.hash);
+				};
 
-            reader.readAsArrayBuffer(file);
-        }
+				reader.readAsArrayBuffer(file);
+			}
 
-        function refund() {
-            let refundAddress = bsv.Address.fromString(document.getElementById('refundAddress').value);
-            let total = utxos.reduce((acc, utxo) => {
-                return acc + utxo.satoshis;
-            }, 0);
+			function refund() {
+				let refundAddress = bsv.Address.fromString(document.getElementById('refundAddress').value);
+				let total = utxos.reduce((acc, utxo) => {
+					return acc + utxo.satoshis;
+				}, 0);
 
-            let txn = new bsv.Transaction()
-                .from(utxos)
-                .to(refundAddress, total - 50000)
-                .sign(privateKey);
-                return fetch('https://api.bitindex.network/api/v2/tx/send', {
-                    method: 'POST',
-                    body: JSON.stringify({ hex: txn.toString() }),
-                    headers: {
-                        api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4',
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then((res) => res.json())
-                .then((res) => {
-                    console.log(res)
-                    initialize();
-                });
-        }
+				let txn = new bsv.Transaction()
+					.from(utxos)
+					.change(refundAddress)
+					.sign(privateKey);
+				return fetch('https://api.bitindex.network/api/v2/tx/send', {
+					method: 'POST',
+					body: JSON.stringify({hex: txn.toString()}),
+					headers: {
+						api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4',
+						'Content-Type': 'application/json',
+					},
+				})
+					.then((res) => res.json())
+					.then((res) => {
+						console.log(res);
+						document.getElementById('refund').innerText = txn.hash;
+						initialize();
+					});
+			}
 
-        function toggle() {
-            if(document.getElementById('wif').style.display == 'none') {
-                document.getElementById('wif').style.display = 'inline';
-                document.getElementById('wif').innerHTML = privateKey.toWIF();
-            }
-            else {
-                document.getElementById('wif').style.display = 'none';
-                document.getElementById('wif').innerHTML = '';
-            }
-        }
-    </script>
-</head>
+			function toggle() {
+				if (document.getElementById('wif').style.display == 'none') {
+					document.getElementById('wif').style.display = 'inline';
+					document.getElementById('wif').innerHTML = privateKey.toWIF();
+				} else {
+					document.getElementById('wif').style.display = 'none';
+					document.getElementById('wif').innerHTML = '';
+				}
+			}
+		</script>
+	</head>
 
-<body onload="initialize()">
-    <p>
-        Address: <span id="address"></span>
-        <div id="qrcode"></div>
-    </p>
-    <h4>Chunked UTXOs</h4>
-    <p>
-        Confirmed: <span id="confirmedChunk">?</span><br>
-        Unconfirmed: <span id="unconfirmedChunk">?</span><br>
-        Chunked Balance: <span id="splitBalance"></span><br>
-    </p>
-    <h4>Other UTXOs</h4>
-    <p>
-        Confirmed: <span id="confirmed">?</span><br>
-        Unconfirmed: <span id="unconfirmed">?</span><br>
-        Balance: <span id="unsplitBalance"></span><br>
-        <button onclick="split()">Split <span id="splitCount">0</span> Times</button>
-    </p>
-    Total Balance: <span id="balance"></span>
+	<body onload="initialize()">
+		<h1>Dynamic files on the blockchain</h1>
 
-    <h4>Upload</h4>
-    <p>
-        <input type="file" id="file" onchange="analyzeFile()"><br>
-        Required Txns: <span id="requiredTxns">0</span><br>
-        Cost: ~<span id="cost">0</span>
-    </p>
-    <button onclick="upload()" id="uploadButton" disabled="true">Upload</button>
-    <p>
-        Transaction ID: <span id="txid">?</span>
-    </p>
-    <h4>Cash Out</h4>
-    <p>
-        <input type="text" id="refundAddress" placeholder="Refund Address">
-    </p>
-    <button onclick="refund()">Refund</button>
-    <h4>Private Key</h4>
-    <button onclick="toggle()">Show/Hide WIF</button>
-    <p><span id="wif" style="display:none"></span></p>
-</body>
+		<hr />
 
+		<div id="qrcode"></div>
+
+        <h2>1. Fund Wallet</h2>
+		<h4>Current address</h4>
+		<p><span id="address"></span></p>
+		<p>
+            Total Balance: <span id="balance"></span>
+            <a href="#" onclick="initialize()">🔄</a>
+        </p>
+
+		<hr />
+
+		<h2>2. Prepare UTXOs</h2>
+		In order to bypass a limitation in the number of chained transactions allowed, split transactions and let them confirm before you upload.
+		<a href="#" onclick="initialize()">🔄</a>
+		<p>
+			Ready: <span id="confirmed">?</span><br />
+            Unconfirmed: <span id="unconfirmed">?</span><br />
+            Unsplit: <span id="unsplit">?</span>
+            <button onclick="split()">Split <span id="splitCount">0</span> Txns</button>
+		</p>
+
+		<hr />
+		<h2>3. Upload</h2>
+		<p>
+			<input type="file" id="file" onchange="analyzeFile()" /><br />
+			Required Txns: <span id="requiredTxns">0</span><br />
+			Cost: ~<span id="cost">0</span>
+		</p>
+		<button onclick="upload()" id="uploadButton" disabled="true">Upload</button>
+		<p><span id="txid"></span></p>
+
+		<hr />
+
+		<h4>Cash Out</h4>
+		<p>
+			<input type="text" id="refundAddress" placeholder="Refund Address" />
+		</p>
+		<button onclick="refund()">Refund</button><br>
+		<span id="refund"></span>
+		<h4>Private Key</h4>
+		<button onclick="toggle()">Show/Hide WIF</button>
+		<p><span id="wif" style="display:none"></span></p>
+	</body>
 </html>
