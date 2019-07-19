@@ -217,9 +217,9 @@
 				console.error(`Missing Txn: ${txnId}`);
 				return;
 			}
-			let res = await fetch('https://api.bitindex.network/api/v2/tx/send', {
+			let res = await fetch('https://api.bitindex.network/api/v3/main/tx/send', {
 				method: 'POST',
-				body: JSON.stringify({ hex: txn.hex }),
+				body: JSON.stringify({ rawtx: txn.hex }),
 				headers: {
 					api_key: '22qtEpsphEv2ZtP8JkBiKD65bLQ26PxyJ66obK42uCGeb3b8MetH1bK5n4xEF3yxQ4',
 					'Content-Type': 'application/json',
@@ -230,7 +230,8 @@
 				document.getElementById(txnId).innerHTML = `<a href="https://whatsonchain.com/tx/${txnId}" target="_blank">Success</a>`;
 			}
 			else {
-				txn.status = await res.json();
+				let error = await res.json();
+				txn.status = error.message.message;
 				document.getElementById(txnId).innerHTML = `Error: ${txn.status} - <a href="javascript:void()" onclick="broadcast('${txnId}')">Retry</a>`;
 			}
 		}
