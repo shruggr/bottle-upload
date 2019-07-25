@@ -63,6 +63,7 @@
 			return fetch('https://api.bitindex.network/api/v3/addr/utxos?address=' + address, {
 				headers: {
 					api_key: '5eTuVfKYpWiaRWaEBN5NF1VPKf9Tvm2HBXh9mmigjNG2iC94ZCnut1SMb3sNV4hwV4',
+					'Content-Type': 'application/json',
 				},
 			})
 				.then((res) => res.json())
