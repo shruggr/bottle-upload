@@ -60,9 +60,10 @@
 			qr.make();
 			document.getElementById('qrcode').innerHTML = qr.createImgTag();
 
-			return fetch('https://api.bitindex.network/api/v2/addrs/utxos?address=' + address, {
+			return fetch('https://api.bitindex.network/api/v3/addr/utxos?address=' + address, {
 				headers: {
 					api_key: '5eTuVfKYpWiaRWaEBN5NF1VPKf9Tvm2HBXh9mmigjNG2iC94ZCnut1SMb3sNV4hwV4',
+					'Content-Type': 'application/json',
 				},
 			})
 				.then((res) => res.json())
@@ -275,7 +276,7 @@
 				.from(utxos)
 				.change(refundAddress)
 				.sign(privateKey);
-			return fetch('https://api.bitindex.network/api/v2/tx/send', {
+			return fetch('https://api.bitindex.network/api/v3/main/tx/send', {
 				method: 'POST',
 				body: JSON.stringify({ hex: txn.toString() }),
 				headers: {
