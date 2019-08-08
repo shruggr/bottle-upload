@@ -6,7 +6,8 @@
 			font-family: monospace;
 			font-size: 15px;
 			margin: 10% auto;
-			max-width: 600px;
+			max-width: 620px;
+			padding: 0 10px;
 			position: relative;
 		}
 
@@ -14,6 +15,17 @@
 			float: right;
 		}
 
+		#btnArea {
+			float: right;
+			text-align: center;
+			padding: 5px;
+		}
+		#btnValue {
+			padding: 0.6em;
+			font-size: 15px;
+			font-weight: bolder;
+		}
+		
 		hr {
 			clear: both;
 		}
@@ -24,8 +36,10 @@
 		}
 	</style>
 	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<script src="https://bico.media/3412b9beb4234acea4d3406c38af5e283cc91486abeddfa80fcb45842c1f99c2/"></script>
 	<script src="https://bico.media/3bd388b0097b3bde7c8c8f5d760e1c772f5e9a002a33a42bb3440a176df21415/"></script>
+	<script src="https://raw.githack.com/bitsent/BitBtn/master/src/bitbtn.js"></script>
 	<!-- <script src="b://3412b9beb4234acea4d3406c38af5e283cc91486abeddfa80fcb45842c1f99c2/"></script>
 	<script src="b://bico.media/3bd388b0097b3bde7c8c8f5d760e1c772f5e9a002a33a42bb3440a176df21415/"></script> -->
 	<script>
@@ -54,6 +68,9 @@
 			}
 			address = privateKey.toAddress();
 			document.getElementById('address').innerText = address;
+			document.getElementById('address').href = "https://whatsonchain.com/address/" + address;
+
+			generateBitBtn();
 
 			const qr = qrcode(0, 'L');
 			qr.addData(`bitcoin:${address}?sv`);
@@ -95,6 +112,20 @@
 					analyzeFile();
 				});
 		}
+		
+		function generateBitBtn(){
+			window.btnInstance.innerHTML = "";
+			btnAmount = parseFloat(window.btnValue.value);
+			if (btnAmount == NaN) window.btnInstance.innerHTML = "error..."
+			else
+				bitbtn.create(window.btnInstance, {
+						label: "Send",
+						address: address.toString(),
+						amount: btnAmount,
+						currency: "BSV",
+						onError: function (error) { console.log(error); },
+					});
+		}
 
 		function split() {
 			let transaction = new bsv.Transaction().from(spendUtxos);
@@ -122,9 +153,12 @@
 			const file = document.getElementById('file').files[0];
 			chunks = Math.ceil(file.size / chunkSize);
 			requiredTxns = chunks + (chunks > 1 ? 1 : 0);
+			var cost = (requiredTxns * splitValue) / 100000000;
 			document.getElementById('requiredTxns').innerText = requiredTxns;
-			document.getElementById('cost').innerText = (requiredTxns * splitValue) / 100000000;
+			document.getElementById('cost').innerText = cost;
 			document.getElementById('uploadButton').disabled = requiredTxns > readyUtxos.length;
+			document.getElementById('btnValue').value = cost;
+			generateBitBtn();
 		}
 
 		async function upload() {
@@ -292,10 +326,19 @@
 				});
 		}
 
+		wifqr = null;
 		function toggle() {
+			if(wifqr === null){
+				var wifqr_generator = qrcode(4, 'M');
+				wifqr_generator.addData(privateKey.toString(), "Byte");
+				wifqr_generator.make();
+				wifqr = wifqr_generator.createImgTag();
+			}
+
 			if (document.getElementById('wif').style.display == 'none') {
 				document.getElementById('wif').style.display = 'inline';
-				document.getElementById('wif').innerHTML = privateKey.toWIF();
+				document.getElementById('wif').innerHTML = 
+					"<br>" + privateKey.toWIF() + "<br>" + wifqr;
 			} else {
 				document.getElementById('wif').style.display = 'none';
 				document.getElementById('wif').innerHTML = '';
@@ -313,12 +356,16 @@
 
 	<h2>1. Fund Wallet</h2>
 	<h4>Current address</h4>
-	<p><span id="address"></span></p>
+	<p><a id="address"></a></p>
 	<p>
 		Total Balance: <span id="balance"></span>
 		<a href="#" onclick="initialize()">🔄</a>
 	</p>
 
+	<div id="btnArea">
+		<input type="number" id="btnValue" oninput="generateBitBtn()" value="0.01" min="0" step="0.00000001">
+		<span id="btnInstance"> ... </span>
+    </div>
 	<hr />
 
 	<h2>2. Prepare UTXOs</h2>
@@ -357,7 +404,7 @@
 	<span id="refund"></span>
 	<h4>Private Key</h4>
 	<button onclick="toggle()">Show/Hide WIF</button>
-	<p><span id="wif" style="display:none"></span></p>
+	<p id="wif" style="display:none"></p>
 </body>
 
 </html>
